@@ -1,29 +1,34 @@
-#! ./.venv/bin/python
-
-from datetime import date
-import os
-import tarfile
-import libtmux
-import subprocess
+#! /home/opc/MCmanage/.venv/bin/python
 import argparse
-from time import sleep
-from enum import Enum
 
-import worldManage
+import libtmux
+
+worlds: dict[str, int] = {}
+worlds["main-world"] = 1
+worlds["modded"] = 2
 
 
 def main():
-    # worldManage.kill_server("stopping server for backup")
+    parser = argparse.ArgumentParser(description="Service management tool")
 
-    # # backup the world
-    # backup_file = os.path.abspath(
-    #     "./backups/" + date.today().strftime("backup-%d-%m-%Y.tar.gz"))
-    # worldFolder = "/home/opc/mcMainBackup"
-    # print(f"Creating backup...")
-    # with tarfile.open(backup_file, "w:gz") as tar:
-    #     tar.add(worldFolder, arcname=os.path.basename(worldFolder))
-    # print(f"Backup saved: {backup_file}")
-    subprocess.run(["rclone", "copy", "-P", "backups/backup-11-08-2024.7z", "west_gdrive:minecraft/"])
+    # Add a single positional argument for the command
+    parser.add_argument("command", choices=[
+                        "start", "stop", "backup"], help = "Command to execute")
+    # parser.add_argument(
+    #     "world", choices=worlds.keys(), help="world to run it on")
 
-if __name__ == "__main__":
-    main()
+    args: argparse.Namespace = parser.parse_args()
+    
+    tmux = libtmux.Server()
+    # print(worlds[args.world])
+    # Execute the corresponding function based on the command
+    if args.command == "start":
+        """Starts the lazyMC session if not running already"""
+        sesh = tmux.new_session("lazy")
+        sesh.active_pane.send_keys('echo \"hiiiii its me\"')
+    elif args.command == "stop":
+        print("stopping")
+    elif args.command == "backup":
+        print("backup")
+
+main()
