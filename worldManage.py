@@ -162,6 +162,7 @@ home = "/home/opc/"
 worlds: dict[str, World] = {}
 worlds["main-world"] = World("OG-Server", "lazy", home+"mcMainWorld")
 worlds["modded"] = World("ModdedServer", "modded", home+"RyansModdedServer")
+worlds["robo"] = World("RoboFriends", "robo", home+"roboFriends")
 
 
 def main():
