@@ -73,7 +73,8 @@ class World:
         # Send message warning of shutdown soon
         if (self.status() == WorldState.Running):
             wait_time: int = 3
-            print(f"shutting down server after waiting for {wait_time} mins ...")
+            print(
+                f"shutting down server after waiting for {wait_time} mins ...")
             self.send_message(
                 f"Warning: Server will shutdown for backup in {wait_time} minutes")
             sleep(wait_time*60)
@@ -157,11 +158,30 @@ def rclone_upload(filepath: str):
     print("Fully uploaded")
 
 
+def purge_old_backups(folder: str, prefix: str, keep_count = 2):
+    f_list: list[tuple[date, str]] = []
+
+    for f_name in os.listdir(folder):
+        if not f_name.startswith(prefix):
+            continue
+        date_str = f_name.removeprefix(f"{prefix}-")
+        date_str = date_str.removesuffix(".tar.gz").removesuffix(".7z")
+        d = None
+        # Getting date from file name
+        s = date_str.split("-")
+        d = date(month=int(s[0]), day=int(s[1]), year=int(s[2]))
+        f_list.append((d, f_name))
+    
+    f_list.sort(key=lambda f: f[0], reverse=True)
+    for d, f_name in f_list[keep_count:]:
+        os.remove(os.path.join(folder, f_name))
+
+
 home = "/home/opc/"
 worlds: dict[str, World] = {}
-worlds["main-world"] = World("OG-Server", "lazy", home+"mcMainWorld")
-worlds["modded"] = World("ModdedServer", "modded", home+"RyansModdedServer")
-worlds["robo"] = World("RoboFriends", "robo", home+"roboFriends")
+worlds["main-world"] = World("main-world", "lazy", home+"mcMainWorld")
+worlds["modded"] = World("modded", "modded", home+"RyansModdedServer")
+worlds["robo"] = World("robo", "robo", home+"roboFriends")
 
 
 def main():
@@ -169,7 +189,7 @@ def main():
 
     # Add a single positional argument for the command
     parser.add_argument("command", choices=[
-                        "start", "stop", "backup", "status"], help="Command to execute")
+                        "start", "stop", "backup", "purge-backups", "status"], help="Command to execute")
     parser.add_argument(
         "world", choices=worlds.keys(), help="Command to execute")
 
@@ -184,6 +204,8 @@ def main():
     elif args.command == "backup":
         file_name = world.backup_server()
         print(file_name)
+    elif args.command == "purge-backups":
+        file_name = purge_old_backups("/home/opc/backups", args.world)
     elif args.command == "status":
         print(f"World \"{world.name}\" is {world.status().name}")
 
