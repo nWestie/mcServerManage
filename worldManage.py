@@ -45,6 +45,7 @@ class World:
 
         # if starting, wait until its up
         if (self.status() == WorldState.Starting):
+            print("waiting to fully start world...")
             self.wait_for_status(WorldState.Running)
 
         # print message that server will be shutdown
@@ -71,12 +72,12 @@ class World:
 
         # Send message warning of shutdown soon
         if (self.status() == WorldState.Running):
-            print("shutting down server...")
             wait_time: int = 3
+            print(f"shutting down server after waiting for {wait_time} mins ...")
             self.send_message(
                 f"Warning: Server will shutdown for backup in {wait_time} minutes")
             sleep(wait_time*60)
-
+        print("killing server ...")
         self.kill_server("Shutting down for backup.", 5)
         sleep(.2)
 
@@ -92,12 +93,7 @@ class World:
         print("Restarting server...")
         self.start_server()
 
-        # Upload to rclone
-        rclone_upload(backup_file)
-        # Send message
-        self.wait_for_status(WorldState.Running)
-        self.send_message(
-            f"Successfully backed up world: {os.path.basename(backup_file)}")
+        return backup_file
 
     def send_message(self, message: str, wait_for_start: bool = True):
         """sends message visible to all minecraft players - waits for server to boot if wait_for_start is true"""
@@ -117,11 +113,13 @@ class World:
 
         term = self.get_session()
         term_height = int(term.height)
-        last_lines: list[str] = term.capture_pane(term_height-100, term_height)
+        last_lines: list[str] = term.capture_pane(term_height-200, term_height)
 
         # iterate over server messages starting with most recent
         for line in reversed(last_lines):
             if ("Server is now sleeping" in line):
+                return WorldState.Stopped
+            if ("Proxying public" in line):
                 return WorldState.Stopped
             if ("Server is now online" in line):
                 return WorldState.Running
@@ -130,6 +128,7 @@ class World:
             if ("Starting server" in line):
                 return WorldState.Starting
         # if none of these are in the last hundred lines(which is unlikely), should be running, probably.
+        print("WARN - State unknown")
         return WorldState.Running
 
     def session_running(self):
@@ -144,7 +143,7 @@ class World:
             session_name=self.tmux_id)
         return test_session.active_pane
 
-    def wait_for_status(self, status: WorldState):
+    def wait_for_status(self, status: WorldState, timeout=-1):
         """Wait for a specific server status to be achieved"""
         while (self.status() != status):
             sleep(1)
@@ -183,7 +182,8 @@ def main():
     elif args.command == "stop":
         world.kill_server()
     elif args.command == "backup":
-        world.backup_server()
+        file_name = world.backup_server()
+        print(file_name)
     elif args.command == "status":
         print(f"World \"{world.name}\" is {world.status().name}")
 
