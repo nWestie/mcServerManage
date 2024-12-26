@@ -2,6 +2,7 @@
 import argparse
 
 import libtmux
+import time
 
 worlds: dict[str, int] = {}
 worlds["main-world"] = 1
@@ -29,6 +30,11 @@ def main():
     elif args.command == "stop":
         print("stopping")
     elif args.command == "backup":
-        print("backup")
+        print("backing up...")
+        for i in range(5):
+            print(f"Time {i}", flush=True)
+            time.sleep(1)
+        print("done backup")
+
 
 main()
