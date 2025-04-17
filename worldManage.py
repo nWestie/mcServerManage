@@ -16,8 +16,8 @@ class WorldState(Enum):
     Starting = 1
     Stopping = 2
     Running = 3
-    Stopped = 4
-    Offline = 5
+    Stopped = 4 # tmux is running, but MC server is stopped
+    Offline = 5 # tmux host is not running
 
 
 tmux = libtmux.Server()
@@ -114,13 +114,15 @@ class World:
 
         term = self.get_session()
         term_height = int(term.height)
-        last_lines: list[str] = term.capture_pane(term_height-200, term_height)
+        last_lines: list[str] = term.capture_pane(term_height-400, term_height)
 
         # iterate over server messages starting with most recent
         for line in reversed(last_lines):
             if ("Server is now sleeping" in line):
                 return WorldState.Stopped
             if ("Proxying public" in line):
+                return WorldState.Stopped
+            if ("Closing connection, error occurred" in line):
                 return WorldState.Stopped
             if ("Server is now online" in line):
                 return WorldState.Running
@@ -182,7 +184,8 @@ home = "/home/opc/"
 worlds: dict[str, World] = {}
 worlds["main-world"] = World("main-world", "lazy", home+"mcMainWorld")
 worlds["modded"] = World("modded", "modded", home+"RyansModdedServer")
-worlds["robo"] = World("robo", "robo", home+"roboFriends")
+worlds["robo"] = World("robo", "robo_1214", home+"roboFriends_1214")
+worlds["robo_old"] = World("robo", "robo", home+"roboFriends")
 
 
 def main():
