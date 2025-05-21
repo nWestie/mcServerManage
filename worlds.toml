@@ -1,0 +1,23 @@
+
+root_dir = "/home/opc/"
+
+# worlds: 
+[create]
+    tmux = "create"
+    dir = "create_world"
+
+[robo]
+    tmux = "robo_1214"
+    dir = "roboFriends_1214"
+
+# [main_world]
+#     tmux = "lazy"
+#     dir = "mcMainWorld"
+
+# [modded]
+#     tmux= "modded"
+#     dir = "RyansModdedServer"
+
+# [robo_old]
+#     tmux= "robo"
+#     dir = "roboFriends"

@@ -1,6 +1,9 @@
 #! /home/opc/MCmanage/.venv/bin/python
 
+from pathlib import Path
+import sys
 from time import sleep
+import time
 import libtmux
 import subprocess
 import argparse
@@ -8,6 +11,8 @@ from enum import Enum
 import tarfile
 from datetime import date
 import os
+
+import tomli
 
 # sesh_name = "lazy"
 
@@ -29,6 +34,8 @@ class World:
         self.name: str = name
         self.tmux_id: str = tmux_sesh
         self.folder: str = server_folder
+    def __repr__(self):
+        return f"[name: {self.name}, tmux: {self.tmux_id}, dir: {self.folder}]"
 
     def start_server(self):
         """Starts the lazyMC session if not running already"""
@@ -151,6 +158,12 @@ class World:
         while (self.status() != status):
             sleep(1)
 
+    def last_ran_time(self)->str:
+        """Return a timestamp showing the last time the server was online"""
+        log_p = "logs/latest.log"
+        full_path = os.path.join(self.folder, log_p)
+        return time.ctime(os.path.getmtime(full_path))
+
 
 def rclone_upload(filepath: str):
     """Save a file to the minecraft backup folder in google drive"""
@@ -180,26 +193,35 @@ def purge_backups(folder: str, prefix: str, keep_count=1):
         os.remove(os.path.join(folder, f_name))
 
 
-home = "/home/opc/"
-worlds: dict[str, World] = {}
-worlds["main-world"] = World("main-world", "lazy", home+"mcMainWorld")
-worlds["modded"] = World("modded", "modded", home+"RyansModdedServer")
-worlds["robo"] = World("robo", "robo_1214", home+"roboFriends_1214")
-worlds["robo_old"] = World("robo", "robo", home+"roboFriends")
-
 
 def main():
+
+    mainDir = Path(__file__).parent.resolve()
+    with open(mainDir.joinpath('worlds.toml'), 'rb') as f:
+        config = tomli.load(f)
+
+    home = config.pop("root_dir")
+    
     parser = argparse.ArgumentParser(description="Service management tool")
 
-    # Add a single positional argument for the command
+    # Add a positional argument for the command
     parser.add_argument("command", choices=[
-                        "start", "stop", "backup", "purge-backups", "status"], help="Command to execute")
-    parser.add_argument(
-        "world", choices=worlds.keys(), help="World to run the command on")
+                        "start", "stop", "backup", "purge-backups", "status", "ls"], help="Command to execute")
+    
+    # Add a positional argument for the world unless list worlds was requested
+    if("ls" not in sys.argv):
+        parser.add_argument(
+            "world", choices=config.keys(), help="World to run the command on")
 
     args: argparse.Namespace = parser.parse_args()
 
-    world = worlds[args.world]
+    # List worlds
+    if(args.command == "ls"):
+        [print(k) for k in config.keys()]
+        exit()
+
+    w_conf = config[args.world]
+    world: World = World(args.world, w_conf["tmux"], home+w_conf["dir"])
     # Execute the corresponding function based on the command
     if args.command == "start":
         world.start_server()
@@ -212,6 +234,7 @@ def main():
         file_name = purge_backups("/home/opc/backups", args.world)
     elif args.command == "status":
         print(f"World \"{world.name}\" is {world.status().name}")
+        print(f" ↪ Last Online: {world.last_ran_time()}")
 
 
 if __name__ == "__main__":
