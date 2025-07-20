@@ -21,19 +21,21 @@ class WorldState(Enum):
     Starting = 1
     Stopping = 2
     Running = 3
-    Stopped = 4 # tmux is running, but MC server is stopped
-    Offline = 5 # tmux host is not running
+    Stopped = 4  # tmux is running, but MC server is stopped
+    Offline = 5  # tmux host is not running
 
 
 tmux = libtmux.Server()
 
 
 class World:
-    def __init__(self, name: str, tmux_sesh: str, server_folder: str):
+    def __init__(self, name: str, tmux_sesh: str, server_folder: str, start_cmd: str):
         "Name must be valid as a path"
         self.name: str = name
         self.tmux_id: str = tmux_sesh
         self.folder: str = server_folder
+        self.start: str = start_cmd
+
     def __repr__(self):
         return f"[name: {self.name}, tmux: {self.tmux_id}, dir: {self.folder}]"
 
@@ -42,7 +44,10 @@ class World:
         if (self.session_running()):
             return
         sesh = tmux.new_session(self.tmux_id)
-        sesh.active_pane.send_keys(f'cd {self.folder} && ./lazymc')
+        if sesh.active_pane:
+            sesh.active_pane.send_keys(f'cd {self.folder} && {self.start}')
+        else:
+            raise Exception("Error starting tmux session")
 
     def kill_server(self, message: str = "", msg_delay: float = 5):
         """Stops server with optional message and delay. Blocks until server is offline and then kills the session."""
@@ -120,8 +125,11 @@ class World:
             return WorldState.Offline
 
         term = self.get_session()
-        term_height = int(term.height)
-        last_lines: list[str] = term.capture_pane(term_height-400, term_height)
+        # this should be valid for any valid  session
+        term_height = int(term.height)  # type: ignore
+        last_lines = term.capture_pane(term_height-400, term_height)
+        if type(last_lines) is str:
+            last_lines = [last_lines]
 
         # iterate over server messages starting with most recent
         for line in reversed(last_lines):
@@ -145,20 +153,23 @@ class World:
         """Check that TMUX is running the lazyMC handler"""
         return tmux.has_session(self.tmux_id)
 
-    def get_session(self):
+    def get_session(self) -> libtmux.Pane:
         """Returns the running tmux session for this server, or throws if it does not exist"""
         if (not self.session_running()):
             raise Exception(f"tmux session {self.tmux_id} is not running")
-        test_session: libtmux.Session = tmux.sessions.get(
+        test_session = tmux.sessions.get(
             session_name=self.tmux_id)
-        return test_session.active_pane
+        if test_session and test_session.active_pane:
+            return test_session.active_pane
+        else:
+            raise Exception("Unknown Error retrieving tmux session")
 
     def wait_for_status(self, status: WorldState, timeout=-1):
         """Wait for a specific server status to be achieved"""
         while (self.status() != status):
             sleep(1)
 
-    def last_ran_time(self)->str:
+    def last_ran_time(self) -> str:
         """Return a timestamp showing the last time the server was online"""
         log_p = "logs/latest.log"
         full_path = os.path.join(self.folder, log_p)
@@ -193,7 +204,6 @@ def purge_backups(folder: str, prefix: str, keep_count=1):
         os.remove(os.path.join(folder, f_name))
 
 
-
 def main():
 
     mainDir = Path(__file__).parent.resolve()
@@ -201,30 +211,34 @@ def main():
         config = tomli.load(f)
 
     home = config.pop("root_dir")
-    
+    back_folder = config.pop("backup_dir")
+
     parser = argparse.ArgumentParser(description="Service management tool")
 
     # Add a positional argument for the command
     parser.add_argument("command", choices=[
                         "start", "stop", "backup", "purge-backups", "status", "ls"], help="Command to execute")
-    
+
     # Add a positional argument for the world unless list worlds was requested
-    if("ls" not in sys.argv):
+    if ("ls" not in sys.argv):
         parser.add_argument(
             "world", choices=config.keys(), help="World to run the command on")
 
     args: argparse.Namespace = parser.parse_args()
 
     # List worlds
-    if(args.command == "ls"):
+    if args.command == "ls":
         [print(k) for k in config.keys()]
         exit()
 
     w_conf = config[args.world]
-    world: World = World(args.world, w_conf["tmux"], home+w_conf["dir"])
+
+    world: World = World(
+        args.world, w_conf["tmux"], home+w_conf["dir"], w_conf["startup_cmd"])
     # Execute the corresponding function based on the command
     if args.command == "start":
         world.start_server()
+        print(f"Started {world.name}")
     elif args.command == "stop":
         world.kill_server()
     elif args.command == "backup":
